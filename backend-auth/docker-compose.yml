@@ -1,0 +1,23 @@
+services:
+
+  db:
+    image: postgres:15-alpine
+    container_name: backend-auth-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-userdb}
+      POSTGRES_USER: ${DB_USERNAME:-admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-admin123}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-admin} -d ${DB_NAME:-userdb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  postgres_data:
