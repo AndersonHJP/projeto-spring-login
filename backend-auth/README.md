@@ -32,21 +32,9 @@ API REST de autenticação de usuários com Spring Boot, Spring Security e JWT. 
 
 `DB_PASSWORD` e `JWT_SECRET` não têm valor padrão: a aplicação não sobe sem elas.
 
-### Docker (`.env`)
 
-Crie um `.env` na raiz, ao lado do `docker-compose.yml`:
 
-```
-DB_NAME=userdb
-DB_USERNAME=admin
-DB_PASSWORD=admin123
-```
-
-Esse arquivo é lido apenas pelo Docker Compose. Adicione-o ao `.gitignore`.
-
-### IDE
-
-O IntelliJ não lê o `.env`. Em **Run → Edit Configurations → Environment variables**:
+Em **Run → Edit Configurations → Environment variables**:
 
 ```
 DB_USERNAME=admin;DB_PASSWORD=admin123;JWT_SECRET=sua-chave-com-32-caracteres-ou-mais
