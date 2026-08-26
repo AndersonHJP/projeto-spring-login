@@ -3,6 +3,9 @@ package com.familyti.product.exception;
 import com.familyti.product.util.LoggerUtil;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.InsufficientAuthenticationException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -45,6 +48,24 @@ public class GlobalExceptionHandler {
         HttpStatus status = HttpStatus.UNAUTHORIZED;
         LoggerUtil.logError(this.getClass(), "handleInvalidCredentials", "Invalid credentials: {}", ex, ex.getMessage());
         return ResponseEntity.status(status).body(buildResponseBody(status, ex.getMessage()));
+    }
+
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<Map<String, Object>> handleAuthentication(AuthenticationException ex) {
+        HttpStatus status = HttpStatus.UNAUTHORIZED;
+        String message = (ex instanceof InsufficientAuthenticationException)
+                ? "Authentication required. Provide a valid Bearer token in the Authorization header."
+                : ex.getMessage();
+        LoggerUtil.logError(this.getClass(), "handleAuthentication", "Authentication failed: {}", ex, message);
+        return ResponseEntity.status(status).body(buildResponseBody(status, message));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<Map<String, Object>> handleAccessDenied(AccessDeniedException ex) {
+        HttpStatus status = HttpStatus.FORBIDDEN;
+        LoggerUtil.logError(this.getClass(), "handleAccessDenied", "Access denied: {}", ex, ex.getMessage());
+        return ResponseEntity.status(status)
+                .body(buildResponseBody(status, "You do not have permission to access this resource."));
     }
 
     private ResponseEntity<Object> buildResponse(String message) {
