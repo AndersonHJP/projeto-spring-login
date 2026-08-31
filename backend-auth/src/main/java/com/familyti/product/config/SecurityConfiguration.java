@@ -1,5 +1,6 @@
 package com.familyti.product.config;
 
+import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -31,6 +32,11 @@ public class SecurityConfiguration {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
+                        // O dispatch de erro do container reentra na chain sem passar pelo JwtAuthFilter
+                        // (shouldNotFilterErrorDispatch e true) e, com politica STATELESS, o contexto
+                        // chega vazio. Sem liberar ERROR aqui, qualquer 4xx/5xx real vira um 401
+                        // "Authentication required" e mascara o erro de verdade.
+                        .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(JwtAuthFilter.PUBLIC_PATHS).permitAll()
                         .anyRequest().authenticated()
                 )

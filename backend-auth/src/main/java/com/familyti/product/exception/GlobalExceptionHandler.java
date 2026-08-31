@@ -9,6 +9,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -16,12 +17,6 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
-
-    @ExceptionHandler(BusinessException.class)
-    public ResponseEntity<Object> handleBusiness(BusinessException ex) {
-        LoggerUtil.logError(this.getClass(), "handleBusiness", "Unhandled business exception: {}", ex, ex.getMessage());
-        return buildResponse(ex.getMessage());
-    }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException ex) {
@@ -68,9 +63,41 @@ public class GlobalExceptionHandler {
                 .body(buildResponseBody(status, "You do not have permission to access this resource."));
     }
 
-    private ResponseEntity<Object> buildResponse(String message) {
-        Map<String, Object> body = buildResponseBody(HttpStatus.BAD_REQUEST, message);
-        return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleResourceNotFound(ResourceNotFoundException ex) {
+        HttpStatus status = HttpStatus.NOT_FOUND;
+        LoggerUtil.logError(this.getClass(), "handleResourceNotFound", "Resource not found: {}", ex, ex.getMessage());
+        return ResponseEntity.status(status).body(buildResponseBody(status, ex.getMessage()));
+    }
+
+    @ExceptionHandler(ForbiddenOperationException.class)
+    public ResponseEntity<Map<String, Object>> handleForbiddenOperation(ForbiddenOperationException ex) {
+        HttpStatus status = HttpStatus.FORBIDDEN;
+        LoggerUtil.logError(this.getClass(), "handleForbiddenOperation", "Forbidden: {}", ex, ex.getMessage());
+        return ResponseEntity.status(status).body(buildResponseBody(status, ex.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidFileException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidFile(InvalidFileException ex) {
+        HttpStatus status = HttpStatus.BAD_REQUEST;
+        LoggerUtil.logError(this.getClass(), "handleInvalidFile", "Invalid file: {}", ex, ex.getMessage());
+        return ResponseEntity.status(status).body(buildResponseBody(status, ex.getMessage()));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<Map<String, Object>> handleMaxUploadSize(MaxUploadSizeExceededException ex) {
+        HttpStatus status = HttpStatus.PAYLOAD_TOO_LARGE;
+        LoggerUtil.logError(this.getClass(), "handleMaxUploadSize", "Upload too large: {}", ex, ex.getMessage());
+        return ResponseEntity.status(status)
+                .body(buildResponseBody(status, "O arquivo excede o limite de 5 MB."));
+    }
+
+    @ExceptionHandler(StorageException.class)
+    public ResponseEntity<Map<String, Object>> handleStorage(StorageException ex) {
+        HttpStatus status = HttpStatus.BAD_GATEWAY;
+        LoggerUtil.logError(this.getClass(), "handleStorage", "Storage failure: {}", ex, ex.getMessage());
+        return ResponseEntity.status(status).body(buildResponseBody(status,
+                "Não foi possível processar o arquivo no momento. Tente novamente."));
     }
 
     private Map<String, Object> buildResponseBody(HttpStatus status, String message) {
