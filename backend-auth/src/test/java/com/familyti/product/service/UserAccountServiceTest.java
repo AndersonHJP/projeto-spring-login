@@ -4,13 +4,16 @@ import com.familyti.product.dto.RegisterAccountRequest;
 import com.familyti.product.dto.UserAccountResponse;
 import com.familyti.product.exception.EmailAlreadyExistsException;
 import com.familyti.product.model.UserAccount;
+import com.familyti.product.enums.UserRole;
 import com.familyti.product.repository.UserAccountRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -53,6 +56,26 @@ class UserAccountServiceTest {
         assertThat(response.id()).isEqualTo(1L);
         assertThat(response.name()).isEqualTo(NAME);
         assertThat(response.email()).isEqualTo(EMAIL);
+    }
+
+    @Test
+    @DisplayName("should always register with the USER role, never ADMIN")
+    void shouldRegisterAsUserRole() {
+        RegisterAccountRequest dto = new RegisterAccountRequest(NAME, RAW_PASSWORD, EMAIL);
+
+        when(userAccountRepository.findByEmail(dto.email())).thenReturn(null);
+        when(passwordEncoder.encode(dto.password())).thenReturn(ENCODED_PASSWORD);
+        when(userAccountRepository.save(any(UserAccount.class))).thenReturn(persistedUser());
+
+        userAccountService.register(dto);
+
+        ArgumentCaptor<UserAccount> saved = ArgumentCaptor.forClass(UserAccount.class);
+        verify(userAccountRepository).save(saved.capture());
+
+        assertThat(saved.getValue().getRole()).isEqualTo(UserRole.USER);
+        assertThat(saved.getValue().getAuthorities())
+                .extracting(GrantedAuthority::getAuthority)
+                .containsExactly("ROLE_USER");
     }
 
     @Test
