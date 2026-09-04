@@ -47,7 +47,7 @@ class S3StorageStrategyTest {
 
     @BeforeEach
     void setUp() {
-        storageStrategy = new S3StorageStrategy(s3Client, s3Presigner, new S3Properties(BUCKET, "us-east-1", 15));
+        storageStrategy = new S3StorageStrategy(s3Client, s3Presigner, new S3Properties(BUCKET, "us-east-2", 15));
     }
 
     @Test

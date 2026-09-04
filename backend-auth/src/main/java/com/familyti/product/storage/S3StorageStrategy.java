@@ -2,7 +2,6 @@ package com.familyti.product.storage;
 
 import com.familyti.product.config.S3Properties;
 import com.familyti.product.exception.StorageException;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -17,7 +16,7 @@ import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignReques
 import java.time.Duration;
 
 @Component
-@ConditionalOnProperty(name = "storage.provider", havingValue = StorageProperties.S3)
+@ConditionalOnStorageProvider(StorageProperties.S3)
 public class S3StorageStrategy implements StorageStrategy {
 
     private final S3Client s3Client;

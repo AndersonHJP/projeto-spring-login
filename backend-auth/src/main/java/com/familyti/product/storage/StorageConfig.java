@@ -1,10 +1,10 @@
 package com.familyti.product.storage;
 
 import com.familyti.product.config.S3Properties;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
@@ -20,8 +20,13 @@ import java.net.URI;
 @EnableConfigurationProperties(StorageProperties.class)
 public class StorageConfig {
 
+    @Bean
+    static StorageStartupValidator storageStartupValidator(Environment environment) {
+        return new StorageStartupValidator(environment);
+    }
+
     @Configuration(proxyBeanMethods = false)
-    @ConditionalOnProperty(name = "storage.provider", havingValue = StorageProperties.S3)
+    @ConditionalOnStorageProvider(StorageProperties.S3)
     @EnableConfigurationProperties(S3Properties.class)
     static class S3ClientConfig {
 
@@ -48,7 +53,7 @@ public class StorageConfig {
     }
 
     @Configuration(proxyBeanMethods = false)
-    @ConditionalOnProperty(name = "storage.provider", havingValue = StorageProperties.MINIO)
+    @ConditionalOnStorageProvider(StorageProperties.MINIO)
     @EnableConfigurationProperties(MinioProperties.class)
     static class MinioClientConfig {
 

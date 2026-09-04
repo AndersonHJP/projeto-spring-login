@@ -1,7 +1,6 @@
 package com.familyti.product.storage;
 
 import com.familyti.product.exception.StorageException;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -16,7 +15,7 @@ import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignReques
 import java.time.Duration;
 
 @Component
-@ConditionalOnProperty(name = "storage.provider", havingValue = StorageProperties.MINIO)
+@ConditionalOnStorageProvider(StorageProperties.MINIO)
 public class MinioStorageStrategy implements StorageStrategy {
 
     private final S3Client minioClient;

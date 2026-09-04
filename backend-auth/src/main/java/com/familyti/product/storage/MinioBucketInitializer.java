@@ -3,7 +3,6 @@ package com.familyti.product.storage;
 import com.familyti.product.util.LoggerUtil;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.BucketAlreadyExistsException;
@@ -14,7 +13,7 @@ import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 
 
 @Component
-@ConditionalOnProperty(name = "storage.provider", havingValue = StorageProperties.MINIO)
+@ConditionalOnStorageProvider(StorageProperties.MINIO)
 public class MinioBucketInitializer implements ApplicationRunner {
 
     private final S3Client minioClient;
