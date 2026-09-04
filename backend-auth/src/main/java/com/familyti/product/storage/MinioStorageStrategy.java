@@ -1,6 +1,5 @@
 package com.familyti.product.storage;
 
-import com.familyti.product.config.S3Properties;
 import com.familyti.product.exception.StorageException;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -17,16 +16,16 @@ import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignReques
 import java.time.Duration;
 
 @Component
-@ConditionalOnProperty(name = "storage.provider", havingValue = StorageProperties.S3)
-public class S3StorageStrategy implements StorageStrategy {
+@ConditionalOnProperty(name = "storage.provider", havingValue = StorageProperties.MINIO)
+public class MinioStorageStrategy implements StorageStrategy {
 
-    private final S3Client s3Client;
-    private final S3Presigner s3Presigner;
-    private final S3Properties properties;
+    private final S3Client minioClient;
+    private final S3Presigner minioPresigner;
+    private final MinioProperties properties;
 
-    public S3StorageStrategy(S3Client s3Client, S3Presigner s3Presigner, S3Properties properties) {
-        this.s3Client = s3Client;
-        this.s3Presigner = s3Presigner;
+    public MinioStorageStrategy(S3Client minioClient, S3Presigner minioPresigner, MinioProperties properties) {
+        this.minioClient = minioClient;
+        this.minioPresigner = minioPresigner;
         this.properties = properties;
     }
 
@@ -39,11 +38,11 @@ public class S3StorageStrategy implements StorageStrategy {
                 .contentLength((long) bytes.length)
                 .build();
         try {
-            s3Client.putObject(request, RequestBody.fromBytes(bytes));
+            minioClient.putObject(request, RequestBody.fromBytes(bytes));
         } catch (S3Exception e) {
             throw storageFailure("upload", key, e);
         } catch (Exception e) {
-            throw new StorageException("Falha ao enviar o arquivo para o S3 (key=" + key + ").", e);
+            throw new StorageException("Falha ao enviar o arquivo para o MinIO (key=" + key + ").", e);
         }
     }
 
@@ -54,11 +53,11 @@ public class S3StorageStrategy implements StorageStrategy {
                 .key(key)
                 .build();
         try {
-            s3Client.deleteObject(request);
+            minioClient.deleteObject(request);
         } catch (S3Exception e) {
             throw storageFailure("delete", key, e);
         } catch (Exception e) {
-            throw new StorageException("Falha ao remover o arquivo do S3 (key=" + key + ").", e);
+            throw new StorageException("Falha ao remover o arquivo do MinIO (key=" + key + ").", e);
         }
     }
 
@@ -75,7 +74,7 @@ public class S3StorageStrategy implements StorageStrategy {
                 .build();
 
         try {
-            return s3Presigner.presignGetObject(presignRequest).url().toExternalForm();
+            return minioPresigner.presignGetObject(presignRequest).url().toExternalForm();
         } catch (Exception e) {
             throw new StorageException("Falha ao gerar a URL pré-assinada (key=" + key + ").", e);
         }
@@ -83,13 +82,14 @@ public class S3StorageStrategy implements StorageStrategy {
 
     @Override
     public String objectUrl(String key) {
-        return s3Client.utilities()
+        return minioClient.utilities()
                 .getUrl(GetUrlRequest.builder().bucket(properties.bucket()).key(key).build())
                 .toExternalForm();
     }
 
     private StorageException storageFailure(String operation, String key, S3Exception e) {
-        String awsMessage = e.awsErrorDetails() != null ? e.awsErrorDetails().errorMessage() : e.getMessage();
-        return StorageException.of(operation, key, awsMessage, e);
+        String detail = e.awsErrorDetails() != null ? e.awsErrorDetails().errorMessage() : e.getMessage();
+        return new StorageException(
+                "Erro do MinIO na operação '" + operation + "' (key=" + key + "): " + detail, e);
     }
 }
