@@ -8,6 +8,7 @@ import com.familyti.product.exception.StorageException;
 import com.familyti.product.model.Photo;
 import com.familyti.product.model.UserAccount;
 import com.familyti.product.repository.PhotoRepository;
+import com.familyti.product.storage.StorageStrategy;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -19,7 +20,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.InputStream;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -27,7 +27,6 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -49,7 +48,7 @@ class PhotoServiceTest {
     private PhotoRepository photoRepository;
 
     @Mock
-    private S3StorageService storageService;
+    private StorageStrategy storageStrategy;
 
     @InjectMocks
     private PhotoService photoService;
@@ -66,8 +65,8 @@ class PhotoServiceTest {
             UserAccount owner = user(OWNER_ID);
             MultipartFile file = jpeg("praia.jpg", 245_760);
 
-            when(storageService.objectUrl(anyString())).thenReturn("https://bucket.s3.amazonaws.com/key");
-            when(storageService.generatePresignedUrl(anyString())).thenReturn(PRESIGNED_URL);
+            when(storageStrategy.objectUrl(anyString())).thenReturn("https://bucket.s3.amazonaws.com/key");
+            when(storageStrategy.generateUrl(anyString())).thenReturn(PRESIGNED_URL);
             when(photoRepository.save(any(Photo.class))).thenAnswer(call -> {
                 Photo saved = call.getArgument(0);
                 saved.setId(PHOTO_ID);
@@ -79,7 +78,7 @@ class PhotoServiceTest {
             PhotoResponse response = photoService.upload(owner, file, "Praia", "Por do sol");
 
             ArgumentCaptor<String> key = ArgumentCaptor.forClass(String.class);
-            verify(storageService).upload(key.capture(), any(InputStream.class), anyLong(), anyString());
+            verify(storageStrategy).upload(key.capture(), anyString(), any(byte[].class));
 
             assertThat(key.getValue())
                     .startsWith("users/12/photos/")
@@ -95,8 +94,8 @@ class PhotoServiceTest {
         @Test
         @DisplayName("usa o nome do arquivo sem extensao como titulo padrao")
         void shouldDefaultTitleToFilename() {
-            when(storageService.objectUrl(anyString())).thenReturn("https://bucket/key");
-            when(storageService.generatePresignedUrl(anyString())).thenReturn(PRESIGNED_URL);
+            when(storageStrategy.objectUrl(anyString())).thenReturn("https://bucket/key");
+            when(storageStrategy.generateUrl(anyString())).thenReturn(PRESIGNED_URL);
             when(photoRepository.save(any(Photo.class))).thenAnswer(call -> call.getArgument(0));
 
             PhotoResponse response = photoService.upload(user(OWNER_ID), jpeg("ferias.jpeg", 1024), null, null);
@@ -108,7 +107,7 @@ class PhotoServiceTest {
         @DisplayName("nao persiste nada quando o upload ao S3 falha")
         void shouldNotPersistWhenS3Fails() {
             doThrow(new StorageException("S3 fora do ar", new RuntimeException()))
-                    .when(storageService).upload(anyString(), any(InputStream.class), anyLong(), anyString());
+                    .when(storageStrategy).upload(anyString(), anyString(), any(byte[].class));
 
             assertThatThrownBy(() -> photoService.upload(user(OWNER_ID), jpeg("a.jpg", 10), null, null))
                     .isInstanceOf(StorageException.class);
@@ -126,7 +125,7 @@ class PhotoServiceTest {
                     .isInstanceOf(InvalidFileException.class)
                     .hasMessageContaining("nao e uma imagem valida");
 
-            verifyNoInteractions(storageService);
+            verifyNoInteractions(storageStrategy);
         }
 
         @Test
@@ -140,7 +139,7 @@ class PhotoServiceTest {
                     .isInstanceOf(InvalidFileException.class)
                     .hasMessageContaining("nao corresponde");
 
-            verifyNoInteractions(storageService);
+            verifyNoInteractions(storageStrategy);
         }
 
         @Test
@@ -153,7 +152,7 @@ class PhotoServiceTest {
                     .isInstanceOf(InvalidFileException.class)
                     .hasMessageContaining("5 MB");
 
-            verifyNoInteractions(storageService);
+            verifyNoInteractions(storageStrategy);
         }
 
         @Test
@@ -178,7 +177,7 @@ class PhotoServiceTest {
             UserAccount owner = user(OWNER_ID);
             when(photoRepository.findByUserIdOrderByCreatedAtDesc(OWNER_ID))
                     .thenReturn(List.of(photo(1L, owner), photo(2L, owner)));
-            when(storageService.generatePresignedUrl(anyString())).thenReturn(PRESIGNED_URL);
+            when(storageStrategy.generateUrl(anyString())).thenReturn(PRESIGNED_URL);
 
             List<PhotoResponse> result = photoService.listByUser(owner);
 
@@ -211,7 +210,7 @@ class PhotoServiceTest {
             assertThatThrownBy(() -> photoService.getById(user(INTRUDER_ID), PHOTO_ID))
                     .isInstanceOf(ForbiddenOperationException.class);
 
-            verifyNoInteractions(storageService);
+            verifyNoInteractions(storageStrategy);
         }
     }
 
@@ -229,15 +228,15 @@ class PhotoServiceTest {
 
             when(photoRepository.findById(PHOTO_ID)).thenReturn(Optional.of(existing));
             when(photoRepository.save(existing)).thenReturn(existing);
-            when(storageService.generatePresignedUrl(EXISTING_KEY)).thenReturn(PRESIGNED_URL);
+            when(storageStrategy.generateUrl(EXISTING_KEY)).thenReturn(PRESIGNED_URL);
 
             PhotoResponse response = photoService.update(owner, PHOTO_ID, "Novo titulo", "Nova descricao", null);
 
             assertThat(response.title()).isEqualTo("Novo titulo");
             assertThat(response.description()).isEqualTo("Nova descricao");
             assertThat(response.s3Key()).isEqualTo(EXISTING_KEY);
-            verify(storageService, never()).upload(anyString(), any(InputStream.class), anyLong(), anyString());
-            verify(storageService, never()).delete(anyString());
+            verify(storageStrategy, never()).upload(anyString(), anyString(), any(byte[].class));
+            verify(storageStrategy, never()).delete(anyString());
         }
 
         @Test
@@ -248,15 +247,15 @@ class PhotoServiceTest {
 
             when(photoRepository.findById(PHOTO_ID)).thenReturn(Optional.of(existing));
             when(photoRepository.save(existing)).thenReturn(existing);
-            when(storageService.objectUrl(anyString())).thenReturn("https://bucket/new");
-            when(storageService.generatePresignedUrl(anyString())).thenReturn(PRESIGNED_URL);
+            when(storageStrategy.objectUrl(anyString())).thenReturn("https://bucket/new");
+            when(storageStrategy.generateUrl(anyString())).thenReturn(PRESIGNED_URL);
 
-            PhotoResponse response = photoService.update(owner, PHOTO_ID, null, null, png(2048));
+            PhotoResponse response = photoService.update(owner, PHOTO_ID, null, null, png("nova.png", 2048));
 
             assertThat(response.s3Key()).isNotEqualTo(EXISTING_KEY).endsWith(".png");
             assertThat(response.contentType()).isEqualTo("image/png");
             assertThat(response.sizeBytes()).isEqualTo(2048L);
-            verify(storageService).delete(EXISTING_KEY);
+            verify(storageStrategy).delete(EXISTING_KEY);
         }
 
         @Test
@@ -267,13 +266,13 @@ class PhotoServiceTest {
 
             when(photoRepository.findById(PHOTO_ID)).thenReturn(Optional.of(existing));
             doThrow(new StorageException("falhou", new RuntimeException()))
-                    .when(storageService).upload(anyString(), any(InputStream.class), anyLong(), anyString());
+                    .when(storageStrategy).upload(anyString(), anyString(), any(byte[].class));
 
-            assertThatThrownBy(() -> photoService.update(owner, PHOTO_ID, null, null, png(10)))
+            assertThatThrownBy(() -> photoService.update(owner, PHOTO_ID, null, null, png("nova.png", 10)))
                     .isInstanceOf(StorageException.class);
 
             assertThat(existing.getS3Key()).isEqualTo(EXISTING_KEY);
-            verify(storageService, never()).delete(EXISTING_KEY);
+            verify(storageStrategy, never()).delete(EXISTING_KEY);
             verify(photoRepository, never()).save(any());
         }
 
@@ -305,7 +304,7 @@ class PhotoServiceTest {
             photoService.delete(owner, PHOTO_ID);
 
             verify(photoRepository).delete(existing);
-            verify(storageService).delete(EXISTING_KEY);
+            verify(storageStrategy).delete(EXISTING_KEY);
         }
 
         @Test
@@ -314,7 +313,7 @@ class PhotoServiceTest {
             UserAccount owner = user(OWNER_ID);
             when(photoRepository.findById(PHOTO_ID)).thenReturn(Optional.of(photo(PHOTO_ID, owner)));
             doThrow(new StorageException("S3 recusou o delete", new RuntimeException()))
-                    .when(storageService).delete(EXISTING_KEY);
+                    .when(storageStrategy).delete(EXISTING_KEY);
 
             assertThatThrownBy(() -> photoService.delete(owner, PHOTO_ID))
                     .isInstanceOf(StorageException.class)
@@ -330,7 +329,7 @@ class PhotoServiceTest {
                     .isInstanceOf(ForbiddenOperationException.class);
 
             verify(photoRepository, never()).delete(any());
-            verifyNoInteractions(storageService);
+            verifyNoInteractions(storageStrategy);
         }
     }
 
@@ -368,8 +367,8 @@ class PhotoServiceTest {
         return new MockMultipartFile("file", name, "image/jpeg", withSignature(JPEG_SIGNATURE, size));
     }
 
-    private static MultipartFile png(int size) {
-        return new MockMultipartFile("file", "nova.png", "image/png", withSignature(PNG_SIGNATURE, size));
+    private static MultipartFile png(String name, int size) {
+        return new MockMultipartFile("file", name, "image/png", withSignature(PNG_SIGNATURE, size));
     }
 
     /** Conteudo do tamanho pedido, comecando pela assinatura do formato. */

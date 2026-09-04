@@ -8,6 +8,7 @@ import com.familyti.product.exception.StorageException;
 import com.familyti.product.model.Photo;
 import com.familyti.product.model.UserAccount;
 import com.familyti.product.repository.PhotoRepository;
+import com.familyti.product.storage.StorageStrategy;
 import com.familyti.product.util.LoggerUtil;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,11 +35,11 @@ public class PhotoService {
     );
 
     private final PhotoRepository photoRepository;
-    private final S3StorageService storageService;
+    private final StorageStrategy storageStrategy;
 
-    public PhotoService(PhotoRepository photoRepository, S3StorageService storageService) {
+    public PhotoService(PhotoRepository photoRepository, StorageStrategy storageStrategy) {
         this.photoRepository = photoRepository;
-        this.storageService = storageService;
+        this.storageStrategy = storageStrategy;
     }
 
     @Transactional
@@ -58,7 +59,7 @@ public class PhotoService {
                 .contentType(contentType)
                 .sizeBytes(file.getSize())
                 .s3Key(s3Key)
-                .s3Url(storageService.objectUrl(s3Key))
+                .s3Url(storageStrategy.objectUrl(s3Key))
                 .title(resolveTitle(title, file.getOriginalFilename()))
                 .description(description)
                 .build();
@@ -106,7 +107,7 @@ public class PhotoService {
             photo.setContentType(contentType);
             photo.setSizeBytes(file.getSize());
             photo.setS3Key(newKey);
-            photo.setS3Url(storageService.objectUrl(newKey));
+            photo.setS3Url(storageStrategy.objectUrl(newKey));
 
             deleteQuietly(previousKey);
         }
@@ -123,7 +124,7 @@ public class PhotoService {
         photoRepository.delete(photo);
         photoRepository.flush();
 
-        storageService.delete(s3Key);
+        storageStrategy.delete(s3Key);
     }
 
     private Photo findOwned(UserAccount user, Long photoId) {
@@ -137,7 +138,7 @@ public class PhotoService {
     }
 
     private PhotoResponse toResponse(Photo photo) {
-        return PhotoResponse.from(photo, storageService.generatePresignedUrl(photo.getS3Key()));
+        return PhotoResponse.from(photo, storageStrategy.generateUrl(photo.getS3Key()));
     }
 
     private String buildKey(Long userId, String storedFilename) {
@@ -145,16 +146,18 @@ public class PhotoService {
     }
 
     private void transfer(MultipartFile file, String s3Key, String contentType) {
-        try (InputStream content = file.getInputStream()) {
-            storageService.upload(s3Key, content, file.getSize(), contentType);
+        byte[] bytes;
+        try {
+            bytes = file.getBytes();
         } catch (IOException e) {
             throw new StorageException("Nao foi possivel ler o arquivo enviado.", e);
         }
+        storageStrategy.upload(s3Key, contentType, bytes);
     }
 
     private void deleteQuietly(String s3Key) {
         try {
-            storageService.delete(s3Key);
+            storageStrategy.delete(s3Key);
         } catch (RuntimeException e) {
             LoggerUtil.logWarn(getClass(), "update",
                     "Objeto antigo nao pode ser removido do S3 (key={}); ficara orfao no bucket. Causa: {}",

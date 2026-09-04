@@ -2,7 +2,7 @@ package com.familyti.product.service;
 
 import com.familyti.product.config.S3Properties;
 import com.familyti.product.exception.StorageException;
-import com.familyti.product.service.impl.S3StorageServiceImpl;
+import com.familyti.product.storage.S3StorageStrategy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,7 +20,6 @@ import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 
-import java.io.ByteArrayInputStream;
 import java.net.URL;
 import java.time.Duration;
 
@@ -32,8 +31,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("S3StorageServiceImpl")
-class S3StorageServiceImplTest {
+@DisplayName("S3StorageStrategy")
+class S3StorageStrategyTest {
 
     private static final String BUCKET = "app-photos-bucket";
     private static final String KEY = "users/12/photos/uuid.jpg";
@@ -44,17 +43,17 @@ class S3StorageServiceImplTest {
     @Mock
     private S3Presigner s3Presigner;
 
-    private S3StorageServiceImpl storageService;
+    private S3StorageStrategy storageStrategy;
 
     @BeforeEach
     void setUp() {
-        storageService = new S3StorageServiceImpl(s3Client, s3Presigner, new S3Properties(BUCKET, "us-east-1", 15));
+        storageStrategy = new S3StorageStrategy(s3Client, s3Presigner, new S3Properties(BUCKET, "us-east-1", 15));
     }
 
     @Test
     @DisplayName("upload envia PutObject com bucket, key, content-type e tamanho, sem ACL publica")
     void shouldPutObject() {
-        storageService.upload(KEY, new ByteArrayInputStream(new byte[4]), 4L, "image/jpeg");
+        storageStrategy.upload(KEY, "image/jpeg", new byte[4]);
 
         ArgumentCaptor<PutObjectRequest> request = ArgumentCaptor.forClass(PutObjectRequest.class);
         verify(s3Client).putObject(request.capture(), any(RequestBody.class));
@@ -74,7 +73,7 @@ class S3StorageServiceImplTest {
         when(presigned.url()).thenReturn(new URL("https://bucket.s3.amazonaws.com/key?X-Amz-Signature=abc"));
         when(s3Presigner.presignGetObject(any(GetObjectPresignRequest.class))).thenReturn(presigned);
 
-        String url = storageService.generatePresignedUrl(KEY);
+        String url = storageStrategy.generateUrl(KEY);
 
         ArgumentCaptor<GetObjectPresignRequest> request = ArgumentCaptor.forClass(GetObjectPresignRequest.class);
         verify(s3Presigner).presignGetObject(request.capture());
@@ -87,7 +86,7 @@ class S3StorageServiceImplTest {
     @Test
     @DisplayName("delete envia DeleteObjectRequest para a key correta")
     void shouldDeleteObject() {
-        storageService.delete(KEY);
+        storageStrategy.delete(KEY);
 
         ArgumentCaptor<DeleteObjectRequest> request = ArgumentCaptor.forClass(DeleteObjectRequest.class);
         verify(s3Client).deleteObject(request.capture());
@@ -106,7 +105,7 @@ class S3StorageServiceImplTest {
 
         when(s3Client.deleteObject(any(DeleteObjectRequest.class))).thenThrow(awsFailure);
 
-        assertThatThrownBy(() -> storageService.delete(KEY))
+        assertThatThrownBy(() -> storageStrategy.delete(KEY))
                 .isInstanceOf(StorageException.class)
                 .hasMessageContaining("Access Denied")
                 .hasMessageContaining(KEY);
