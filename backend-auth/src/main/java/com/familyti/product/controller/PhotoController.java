@@ -38,8 +38,9 @@ public class PhotoController {
     public PhotoResponse upload(@AuthenticationPrincipal UserAccount user,
                                 @RequestPart("file") MultipartFile file,
                                 @RequestParam(value = "title", required = false) String title,
-                                @RequestParam(value = "description", required = false) String description) {
-        return photoService.upload(user, file, title, description);
+                                @RequestParam(value = "description", required = false) String description,
+                                @RequestParam(value = "storageProvider", required = false) String storageProvider) {
+        return photoService.upload(user, file, title, description, storageProvider);
     }
 
     @GetMapping

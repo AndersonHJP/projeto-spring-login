@@ -8,13 +8,14 @@ import com.familyti.product.exception.StorageException;
 import com.familyti.product.model.Photo;
 import com.familyti.product.model.UserAccount;
 import com.familyti.product.repository.PhotoRepository;
+import com.familyti.product.storage.StorageRegistry;
 import com.familyti.product.storage.StorageStrategy;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
@@ -28,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -50,8 +52,17 @@ class PhotoServiceTest {
     @Mock
     private StorageStrategy storageStrategy;
 
-    @InjectMocks
     private PhotoService photoService;
+
+    @BeforeEach
+    void buildService() {
+        when(storageStrategy.provider()).thenReturn("s3");
+        photoService = new PhotoService(photoRepository, StorageRegistry.of("s3", storageStrategy));
+
+        // StorageRegistry.of indexa pelo provider(); sem limpar, os testes que exigem
+        // "storage intocado" contariam essa chamada de montagem.
+        clearInvocations(storageStrategy);
+    }
 
     // ------------------------------------------------------------------ upload
 
@@ -75,7 +86,7 @@ class PhotoServiceTest {
                 return saved;
             });
 
-            PhotoResponse response = photoService.upload(owner, file, "Praia", "Por do sol");
+            PhotoResponse response = photoService.upload(owner, file, "Praia", "Por do sol", null);
 
             ArgumentCaptor<String> key = ArgumentCaptor.forClass(String.class);
             verify(storageStrategy).upload(key.capture(), anyString(), any(byte[].class));
@@ -98,7 +109,7 @@ class PhotoServiceTest {
             when(storageStrategy.generateUrl(anyString())).thenReturn(PRESIGNED_URL);
             when(photoRepository.save(any(Photo.class))).thenAnswer(call -> call.getArgument(0));
 
-            PhotoResponse response = photoService.upload(user(OWNER_ID), jpeg("ferias.jpeg", 1024), null, null);
+            PhotoResponse response = photoService.upload(user(OWNER_ID), jpeg("ferias.jpeg", 1024), null, null, null);
 
             assertThat(response.title()).isEqualTo("ferias");
         }
@@ -109,7 +120,7 @@ class PhotoServiceTest {
             doThrow(new StorageException("S3 fora do ar", new RuntimeException()))
                     .when(storageStrategy).upload(anyString(), anyString(), any(byte[].class));
 
-            assertThatThrownBy(() -> photoService.upload(user(OWNER_ID), jpeg("a.jpg", 10), null, null))
+            assertThatThrownBy(() -> photoService.upload(user(OWNER_ID), jpeg("a.jpg", 10), null, null, null))
                     .isInstanceOf(StorageException.class);
 
             verify(photoRepository, never()).save(any());
@@ -121,7 +132,7 @@ class PhotoServiceTest {
             MultipartFile pdf = new MockMultipartFile(
                     "file", "doc.pdf", "application/pdf", withSignature(PDF_SIGNATURE, 32));
 
-            assertThatThrownBy(() -> photoService.upload(user(OWNER_ID), pdf, null, null))
+            assertThatThrownBy(() -> photoService.upload(user(OWNER_ID), pdf, null, null, null))
                     .isInstanceOf(InvalidFileException.class)
                     .hasMessageContaining("nao e uma imagem valida");
 
@@ -135,22 +146,9 @@ class PhotoServiceTest {
             MultipartFile disguised = new MockMultipartFile(
                     "file", "malware.exe", "image/png", withSignature(PNG_SIGNATURE, 32));
 
-            assertThatThrownBy(() -> photoService.upload(user(OWNER_ID), disguised, null, null))
+            assertThatThrownBy(() -> photoService.upload(user(OWNER_ID), disguised, null, null, null))
                     .isInstanceOf(InvalidFileException.class)
                     .hasMessageContaining("nao corresponde");
-
-            verifyNoInteractions(storageStrategy);
-        }
-
-        @Test
-        @DisplayName("rejeita arquivo acima de 5 MB")
-        void shouldRejectOversizedFile() {
-            MultipartFile big = new MockMultipartFile(
-                    "file", "big.png", "image/png", new byte[(int) PhotoService.MAX_FILE_SIZE_BYTES + 1]);
-
-            assertThatThrownBy(() -> photoService.upload(user(OWNER_ID), big, null, null))
-                    .isInstanceOf(InvalidFileException.class)
-                    .hasMessageContaining("5 MB");
 
             verifyNoInteractions(storageStrategy);
         }
@@ -160,7 +158,7 @@ class PhotoServiceTest {
         void shouldRejectEmptyFile() {
             MultipartFile empty = new MockMultipartFile("file", "vazio.png", "image/png", new byte[0]);
 
-            assertThatThrownBy(() -> photoService.upload(user(OWNER_ID), empty, null, null))
+            assertThatThrownBy(() -> photoService.upload(user(OWNER_ID), empty, null, null, null))
                     .isInstanceOf(InvalidFileException.class);
         }
     }

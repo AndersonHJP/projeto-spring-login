@@ -52,6 +52,9 @@ public class Photo {
     @Column(name = "s3_url", nullable = false, length = 1024)
     private String s3Url;
 
+    @Column(name = "storage_provider", length = 20)
+    private String provider;
+
     @Column(length = 255)
     private String title;
 
@@ -73,6 +76,16 @@ public class Photo {
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
+    }
+
+    public String resolveProvider() {
+        if (provider != null && !provider.isBlank()) {
+            return provider;
+        }
+        if (s3Url == null || s3Url.isBlank()) {
+            return null;
+        }
+        return s3Url.contains(".amazonaws.com") ? "s3" : "minio";
     }
 
     public boolean belongsTo(UserAccount candidate) {
